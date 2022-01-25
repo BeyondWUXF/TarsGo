@@ -108,6 +108,7 @@ func (g *globalManager) checkEpStatus() {
 			}
 		}
 		g.mlock.Unlock()
+		fmt.Print("checkEpStatus:%d", len(eps))
 		for _, e := range eps {
 			e.checkStatus()
 		}
