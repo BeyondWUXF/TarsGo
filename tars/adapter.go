@@ -207,8 +207,7 @@ func (c *AdapterProxy) onPush(pkg *requestf.ResponsePacket) {
 }
 
 func (c *AdapterProxy) doKeepAlive() {
-	fmt.Print("c.lastKeepAliveTime:%d,c.comm.Client.KeepAliveInterval=%d,%d", c.lastKeepAliveTime, c.comm.Client.KeepAliveInterval, c.comm.Client.KeepAliveInterval/1000)
-	if !c.closed {
+	if c.closed {
 		return
 	}
 
