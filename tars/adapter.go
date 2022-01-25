@@ -3,6 +3,7 @@ package tars
 import (
 	"context"
 	"fmt"
+	"github.com/TarsCloud/TarsGo/tars/util/current"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,20 +19,21 @@ var reconnectMsg = "_reconnect_"
 
 // AdapterProxy : Adapter proxy
 type AdapterProxy struct {
-	resp            sync.Map
-	point           *endpointf.EndpointF
-	tarsClient      *transport.TarsClient
-	conf            *transport.TarsClientConf
-	comm            *Communicator
-	obj             *ServantProxy
-	failCount       int32
-	lastFailCount   int32
-	sendCount       int32
-	successCount    int32
-	status          bool // true for good
-	lastSuccessTime int64
-	lastBlockTime   int64
-	lastCheckTime   int64
+	resp              sync.Map
+	point             *endpointf.EndpointF
+	tarsClient        *transport.TarsClient
+	conf              *transport.TarsClientConf
+	comm              *Communicator
+	obj               *ServantProxy
+	failCount         int32
+	lastFailCount     int32
+	sendCount         int32
+	successCount      int32
+	status            bool // true for good
+	lastSuccessTime   int64
+	lastBlockTime     int64
+	lastCheckTime     int64
+	lastKeepAliveTime int64
 
 	count  int
 	closed bool
@@ -150,6 +152,7 @@ func (c *AdapterProxy) reset() {
 	atomic.SwapInt32(&c.lastFailCount, 0)
 	atomic.SwapInt64(&c.lastBlockTime, now)
 	atomic.SwapInt64(&c.lastCheckTime, now)
+	atomic.SwapInt64(&c.lastKeepAliveTime, now)
 	c.status = true
 }
 
@@ -201,4 +204,54 @@ func (c *AdapterProxy) onPush(pkg *requestf.ResponsePacket) {
 		oldClient.GraceClose(ctx) // grace shutdown
 	}
 	//TODO: support push msg
+}
+
+func (c *AdapterProxy) doKeepAlive() {
+	if !c.closed {
+		return
+	}
+
+	if c.obj.queueLen > c.comm.Client.ObjQueueMax {
+		return
+	}
+
+	now := time.Now().Unix()
+	if now-c.lastKeepAliveTime < int64(c.comm.Client.KeepAliveInterval/1000) {
+		return
+	}
+	c.lastKeepAliveTime = now
+
+	ctx := context.Background()
+	var _status map[string]string
+	var _context map[string]string
+
+	req := requestf.RequestPacket{
+		IVersion:     c.obj.version,
+		CPacketType:  int8(0),
+		IRequestId:   c.obj.genRequestID(),
+		SServantName: c.obj.name,
+		SFuncName:    "tars_ping",
+		//SBuffer:      tools.ByteToInt8(buf),
+		//ITimeout:     s.comm.Client.ReqDefaultTimeout,
+		ITimeout:     int32(c.obj.timeout),
+		Context:      _context,
+		Status:       _status,
+		IMessageType: int32(basef.TARSONEWAY),
+	}
+	msg := &Message{Req: &req, Ser: c.obj}
+	msg.Init()
+
+	current.SetServerIPWithContext(ctx, c.point.Host)
+	current.SetServerPortWithContext(ctx, fmt.Sprintf("%v", c.point.Port))
+	msg.Adp = c
+	atomic.AddInt32(&c.obj.queueLen, 1)
+	defer func() {
+		CheckPanic()
+		atomic.AddInt32(&c.obj.queueLen, -1)
+	}()
+	if err := c.Send(msg.Req); err != nil {
+		c.failAdd()
+		return
+	}
+	c.successAdd()
 }

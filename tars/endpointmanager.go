@@ -260,6 +260,10 @@ func (e *tarsEndpointManager) checkStatus() {
 					TLOG.Errorf("checkStatus|insert check adapter, ep: %+v", ep.Key)
 				}
 			}
+
+			if e.comm.Client.KeepAliveInterval > 0 {
+				v.(*AdapterProxy).doKeepAlive()
+			}
 		}
 	}
 }
