@@ -3,7 +3,6 @@ package tars
 import (
 	"context"
 	"fmt"
-	"github.com/TarsCloud/TarsGo/tars/util/current"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -221,28 +220,22 @@ func (c *AdapterProxy) doKeepAlive() {
 	}
 	c.lastKeepAliveTime = now
 
-	ctx := context.Background()
-	var _status map[string]string
-	var _context map[string]string
-
 	req := requestf.RequestPacket{
 		IVersion:     c.obj.version,
-		CPacketType:  int8(0),
+		CPacketType:  int8(basef.TARSONEWAY),
 		IRequestId:   c.obj.genRequestID(),
 		SServantName: c.obj.name,
 		SFuncName:    "tars_ping",
 		//SBuffer:      tools.ByteToInt8(buf),
 		//ITimeout:     s.comm.Client.ReqDefaultTimeout,
-		ITimeout:     int32(c.obj.timeout),
-		Context:      _context,
-		Status:       _status,
-		IMessageType: int32(basef.TARSONEWAY),
+		ITimeout: int32(c.obj.timeout),
+		//Context:      _context,
+		//Status:       _status,
+		//IMessageType: int32(0),
 	}
 	msg := &Message{Req: &req, Ser: c.obj}
 	msg.Init()
 
-	current.SetServerIPWithContext(ctx, c.point.Host)
-	current.SetServerPortWithContext(ctx, fmt.Sprintf("%v", c.point.Port))
 	msg.Adp = c
 	atomic.AddInt32(&c.obj.queueLen, 1)
 	defer func() {
